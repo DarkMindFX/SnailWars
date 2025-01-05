@@ -1,34 +1,73 @@
 local composer = require("composer")
+local math = require("math")
 
 local scene = composer.newScene();
 
+local team = {
+    name = "",
+    snails = {}
+}
+
 local game = {
 
-    team1 = {},
+    teams = {},
 
-    team2 = {},
-
-    turn = 0,
+    currTeam = nil,
 
     currSnail = nil
 }
+
+function game:onSnailTap(snail)
+    self.currSnail = snail
+
+    print("Snail selected: Team = ", snail.properties.team, " Snail = ", snail.properties.id, " Health = ", snail.properties.health)
+end
+
+function game:moveSnail(diff)
+    
+    if (self.currSnail ~= nil ) then
+
+        if(self.currSnail.properties.direction * diff < 0) then
+            self.currSnail.properties.direction = diff / math.abs(diff)
+
+            self.currSnail.xScale = self.currSnail.properties.direction
+        end
+
+        print("Snail direction: ", self.currSnail.properties.direction)
+
+        
+
+        self.currSnail.x = self.currSnail.x + diff
+    end
+end
 
 -- -----------------------------------------------------------------------------------
 -- Scene event functions
 -- -----------------------------------------------------------------------------------
 
-function scene:createCharacter(img)
+function scene:createCharacter(team, id, img)
     local grpSnail = display.newGroup()
     
-    grpSnail.properties = {}
-    grpSnail.properties.direction = 1 -- -1 = left, 1 = right
-    grpSnail.properties.health = 100
+    grpSnail.properties = {
+        team = team,
+        id = id,
+        health = 100,
+        direction = 1 -- -1 = left, 1 = right
+    }
 
     grpSnail.img = display.newImage("images/character/" .. img);
     grpSnail:insert(grpSnail.img);
     grpSnail.img.x = 0
     grpSnail.img.y = 0
-    grpSnail:scale(0.2, grpSnail.properties.direction * 0.2)
+    grpSnail:scale(1, grpSnail.properties.direction)
+
+    function grpSnail:tap(event)
+        local snail = event.target
+        print("Snail tapped - Team = " , snail.properties.team, " ID = ", snail.properties.id)
+        game:onSnailTap(snail)
+    end
+
+    grpSnail:addEventListener("tap", self.grpSnail)
 
     return grpSnail
  
@@ -37,7 +76,7 @@ end
 function scene:createTerrain()
     local grpTerrain = display.newGroup()
 
-    grpTerrain.img = display.newImage("images/background/ground_00.png")
+    grpTerrain.img = display.newImage("images/background/ground_5000.png")
     grpTerrain.img.x = 0
     grpTerrain.img.y = 0
 
@@ -49,13 +88,27 @@ end
 function scene:createControls(callbacks)
     local grpContros = display.newGroup()
 
+    -- Button to move snail left
     grpContros.btnMoveLeft = display.newImage("images/assets/move_left_arrow.png")
-    grpContros.btnMoveLeft.x = grpContros.btnMoveLeft.width / 2
+    grpContros.btnMoveLeft.x = (display.contentWidth - display.actualContentWidth) / 2 + grpContros.btnMoveLeft.width / 2
     grpContros.btnMoveLeft.y = display.contentHeight - grpContros.btnMoveLeft.height / 2
 
+    function grpContros.btnMoveLeft:tap(event)
+        game:moveSnail(-10)
+    end
+
+    grpContros.btnMoveLeft:addEventListener("tap", grpContros.btnMoveLeft)
+
+    -- Button to move snail right
     grpContros.btnMoveRight = display.newImage("images/assets/move_right_arrow.png")
-    grpContros.btnMoveRight.x = display.contentWidth - grpContros.btnMoveRight.width / 2
+    grpContros.btnMoveRight.x = display.actualContentWidth - (display.actualContentWidth - display.contentWidth) / 2 - grpContros.btnMoveLeft.width / 2
     grpContros.btnMoveRight.y = display.contentHeight - grpContros.btnMoveRight.height / 2
+
+    function grpContros.btnMoveRight:tap(event)
+        game:moveSnail(10)
+    end
+
+    grpContros.btnMoveRight:addEventListener("tap", grpContros.btnMoveRight)
 
     grpContros:insert(grpContros.btnMoveLeft)
     grpContros:insert(grpContros.btnMoveRight)
@@ -74,14 +127,14 @@ function scene:createPlayField()
     grpTerrain.y = display.contentHeight - grpTerrain.height / 2
     -- create teams
 
-    local grpPlayer1 = self:createCharacter("snail_green.png");
-    local grpPlayer2 = self:createCharacter("snail_brown.png");
+    local grpPlayer1 = self:createCharacter(0, 0, "snail_green.png");
+    local grpPlayer2 = self:createCharacter(1, 0, "snail_brown.png");
     
-    grpPlayer1.x = display.contentWidth / 2 - 400
-    grpPlayer1.y = grpTerrain.y - grpTerrain.height / 2 - grpPlayer1.height / 2 * 0.2
+    grpPlayer1.x = display.contentWidth / 2 - 500
+    grpPlayer1.y = grpTerrain.y - grpTerrain.height / 2 - grpPlayer1.height / 2
 
-    grpPlayer2.x = display.contentWidth / 2 + 400
-    grpPlayer2.y = grpTerrain.y - grpTerrain.height / 2 - grpPlayer2.height / 2 * 0.2
+    grpPlayer2.x = display.contentWidth / 2 + 500
+    grpPlayer2.y = grpTerrain.y - grpTerrain.height / 2 - grpPlayer2.height / 2
 
     grpFieldContent:insert(grpPlayer1)
     grpFieldContent:insert(grpPlayer2)
@@ -90,7 +143,7 @@ function scene:createPlayField()
         if event.phase == "began" then
             display.getCurrentStage():setFocus( self )
             self.isFocus = true
-            self.xStart = event.xStart
+            self.xStart = self.x
         end
         if self.isFocus and event.phase == "moved" then
             -- can move house content only horizontally
