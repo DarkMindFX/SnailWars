@@ -14,16 +14,31 @@ local game = {
 
     currTeam = nil,
 
-    currSnail = nil
+    currSnail = nil,
+
+    scene = nil
 }
 
 function game:onSnailTap(snail)
-    self.currSnail = snail
+    
+    if(snail ~= self.currSnail) then
 
-    print("Snail selected: Team = ", snail.properties.team, " Snail = ", snail.properties.id, " Health = ", snail.properties.health)
+        if(self.currSnail ~= nil) then
+            self.currSnail:hideAim()
+        end
+
+        self.scene.grpFieldContent:pointToSnail(snail)
+
+        self.currSnail = snail
+
+        self.currSnail:showAim()
+        print("Snail selected: Team = ", snail.properties.team, " Snail = ", snail.properties.id, " Health = ", snail.properties.health)
+    end
 end
 
 function game:moveSnail(diff)
+
+    self.scene.grpFieldContent.arrowCurrSnail.isVisible = false
     
     if (self.currSnail ~= nil ) then
 
@@ -33,11 +48,10 @@ function game:moveSnail(diff)
             self.currSnail.xScale = self.currSnail.properties.direction
         end
 
-        print("Snail direction: ", self.currSnail.properties.direction)
-
-        
-
         self.currSnail.x = self.currSnail.x + diff
+        self.scene.grpFieldContent.arrowCurrSnail.x = self.currSnail.x
+        -- self.scene.grpFieldContent.arrowCurrSnail.isVisible = true
+        self.currSnail:showAim()
     end
 end
 
@@ -52,22 +66,61 @@ function scene:createCharacter(team, id, img)
         team = team,
         id = id,
         health = 100,
-        direction = 1 -- -1 = left, 1 = right
+        direction = 1,  -- -1 = left, 1 = right,
+        aimDirection = math.pi / 180 * -45, -- angle in radians
+        aimPower = 0
     }
 
     grpSnail.img = display.newImage("images/character/" .. img);
     grpSnail:insert(grpSnail.img);
     grpSnail.img.x = 0
     grpSnail.img.y = 0
+
+    grpSnail.aimPointer = display.newImage("images/assets/aim_red.png")
+    grpSnail.aimPointer.isVisible = false
+    grpSnail:insert(grpSnail.aimPointer);
+
     grpSnail:scale(1, grpSnail.properties.direction)
 
-    function grpSnail:tap(event)
-        local snail = event.target
-        print("Snail tapped - Team = " , snail.properties.team, " ID = ", snail.properties.id)
-        game:onSnailTap(snail)
+    function grpSnail:touch(event)
+        print(event.phase)
+        if event.phase == "began" then
+            game:onSnailTap(self)
+            print("Snail tapped - Team = " , self.properties.team, " ID = ", self.properties.id)
+
+            display.getCurrentStage():setFocus( self )
+            self.isFocus = true
+            self.xStart = self.img.x
+            self.yStart = self.img.y
+        end
+        if self.isFocus and event.phase == "moved" then
+            local newAngle = math.asin( event.yDelta / event.xDelta )
+            if(newAngle < 1.57) then
+                self.properties.aimDirection = newAngle
+                print("aimDirection = " .. self.properties.aimDirection)
+            
+            end
+            self.properties.aimPower = math.sqrt( event.yDelta * event.yDelta + event.xDelta * event.xDelta )     
+            self:showAim()       
+        end 
+        if event.phase == "ended" or event.phase == "cancelled" then
+            display.getCurrentStage():setFocus( nil )
+            self.isFocus = false
+        end
+        return true
     end
 
-    grpSnail:addEventListener("tap", self.grpSnail)
+    function grpSnail:showAim()
+        self.aimPointer.isVisible = true
+        self.aimPointer.x = self.img.x + 200 * math.cos(self.properties.aimDirection)
+        self.aimPointer.y = self.img.y + 200 * math.sin(self.properties.aimDirection)
+    end
+
+    function grpSnail:hideAim()
+        self.aimPointer.isVisible = false
+    end
+
+    grpSnail:addEventListener("touch", self.grpSnail)
 
     return grpSnail
  
@@ -139,6 +192,7 @@ function scene:createPlayField()
     grpFieldContent:insert(grpPlayer1)
     grpFieldContent:insert(grpPlayer2)
 
+    --[[
     function grpFieldContent:touch(event)
         if event.phase == "began" then
             display.getCurrentStage():setFocus( self )
@@ -146,7 +200,7 @@ function scene:createPlayField()
             self.xStart = self.x
         end
         if self.isFocus and event.phase == "moved" then
-            -- can move house content only horizontally
+
             self.x = self.xStart + event.xDelta
             
         end 
@@ -156,11 +210,49 @@ function scene:createPlayField()
         end
         return true
     end
+    
 
     grpFieldContent:addEventListener("touch", self.grpFieldContent)
+    ]]
+
+    -- snail pointer
+    local arrowCurrSnail = display.newImage("images/assets/snail_selected_arrow.png")    
+    arrowCurrSnail.isVisible = false
+
+    grpFieldContent.arrowCurrSnail = arrowCurrSnail
+    
+    function grpFieldContent:pointToSnail(snail)
+        grpFieldContent.arrowCurrSnail.isVisible = false
+    
+        grpFieldContent.arrowCurrSnail.x = snail.x
+        grpFieldContent.arrowCurrSnail.y = -20
+    
+        grpFieldContent.arrowCurrSnail.isVisible = true
+    
+        transition.to(grpFieldContent.arrowCurrSnail, {
+            y = snail.y - snail.height / 2 - grpFieldContent.arrowCurrSnail.height / 2,
+            time = 300
+        })
+    
+    end
+
+    grpFieldContent:insert(arrowCurrSnail)    
+
+    -- aim pointer
+    local aimPointer = display.newImage("images/assets/aim_red.png")
+    aimPointer.isVisible = false
+    aimPointer.direction = math.pi / 180 * -45
+
+    grpFieldContent.aimPointer = aimPointer
+
+    grpFieldContent:insert(aimPointer)
+
+    -- return full field content
 
     return grpFieldContent;
 end
+
+
 
 -- create()
 function scene:create( event )
@@ -182,6 +274,9 @@ function scene:create( event )
 
     self.grpFieldContent = grpFieldContent
     self.grpSceneContent = grpSceneContent
+    self.grpControls = grpControls
+
+    game.scene = self
 
 	sceneGroup:insert(grpSceneContent)
 
