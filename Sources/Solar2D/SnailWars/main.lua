@@ -25,8 +25,7 @@ function printDisplayInfo()
         {   effect = "fade",
             time = 300,
             params = {
-                numPlayersPerTeam = 2,
-                scale = 0.2
+                numPlayersPerTeam = 3
             } }
     )
 

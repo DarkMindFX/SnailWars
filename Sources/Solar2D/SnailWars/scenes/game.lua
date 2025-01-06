@@ -1,6 +1,8 @@
 local composer = require("composer")
 local math = require("math")
 
+local rpgFactory = require("weapon.rpg")
+
 local scene = composer.newScene();
 
 local team = {
@@ -55,6 +57,17 @@ function game:moveSnail(diff)
     end
 end
 
+function game:snailShoot()
+    if (self.currSnail ~= nil ) then
+        physics.start()
+
+        local power = 10 * self.currSnail.properties.aimPower
+
+        --self.currSnail.weapon:shoot(0, 0)
+
+    end
+end
+
 -- -----------------------------------------------------------------------------------
 -- Scene event functions
 -- -----------------------------------------------------------------------------------
@@ -80,10 +93,12 @@ function scene:createCharacter(team, id, img)
     grpSnail.aimPointer.isVisible = false
     grpSnail:insert(grpSnail.aimPointer);
 
+    grpSnail.weapon = nil
+
     grpSnail:scale(1, grpSnail.properties.direction)
 
     function grpSnail:touch(event)
-        print(event.phase)
+
         if event.phase == "began" then
             game:onSnailTap(self)
             print("Snail tapped - Team = " , self.properties.team, " ID = ", self.properties.id)
@@ -94,16 +109,24 @@ function scene:createCharacter(team, id, img)
             self.yStart = self.img.y
         end
         if self.isFocus and event.phase == "moved" then
-            local newAngle = math.asin( event.yDelta / event.xDelta )
-            if(newAngle < 1.57) then
+            local newAngle = math.asin( event.yDelta / event.xDelta ) * self.properties.direction * (180 / math.pi)
+            if(newAngle < 180) then
                 self.properties.aimDirection = newAngle
-                print("aimDirection = " .. self.properties.aimDirection)
-            
+                print("aimDirection = " .. self.properties.aimDirection)            
             end
-            self.properties.aimPower = math.sqrt( event.yDelta * event.yDelta + event.xDelta * event.xDelta )     
+            local newPower = math.sqrt( event.yDelta * event.yDelta + event.xDelta * event.xDelta ) / 300 
+            if(newPower >= 0 and newPower < 1) then
+                self.properties.aimPower = newPower
+            end
+            print("aimPower = " .. self.properties.aimPower) 
             self:showAim()       
         end 
         if event.phase == "ended" or event.phase == "cancelled" then
+
+            if(event.phase == "ended" and self.properties.aimPower > 0) then
+                game:snailShoot()
+            end
+
             display.getCurrentStage():setFocus( nil )
             self.isFocus = false
         end
@@ -111,12 +134,29 @@ function scene:createCharacter(team, id, img)
     end
 
     function grpSnail:showAim()
+
+        if(self.weapon == nil) then
+            local weapon = rpgFactory:create()
+            weapon.x = self.x
+            weapon.y = self.yDelta
+
+            self:insert(weapon)
+            self.weapon = weapon
+        end
+
         self.aimPointer.isVisible = true
-        self.aimPointer.x = self.img.x + 200 * math.cos(self.properties.aimDirection)
-        self.aimPointer.y = self.img.y + 200 * math.sin(self.properties.aimDirection)
+        self.aimPointer.x = self.img.x + 200 * math.cos(self.properties.aimDirection * math.pi / 180)
+        self.aimPointer.y = self.img.y + 200 * math.sin(self.properties.aimDirection * math.pi / 180)
+
+        if(self.weapon ~= nil) then
+            self.weapon.rotation = self.properties.aimDirection
+        end
+
     end
 
     function grpSnail:hideAim()
+        self.weapon:removeSelf()
+        self.weapon = nil
         self.aimPointer.isVisible = false
     end
 
@@ -192,7 +232,7 @@ function scene:createPlayField()
     grpFieldContent:insert(grpPlayer1)
     grpFieldContent:insert(grpPlayer2)
 
-    --[[
+    
     function grpFieldContent:touch(event)
         if event.phase == "began" then
             display.getCurrentStage():setFocus( self )
@@ -213,7 +253,6 @@ function scene:createPlayField()
     
 
     grpFieldContent:addEventListener("touch", self.grpFieldContent)
-    ]]
 
     -- snail pointer
     local arrowCurrSnail = display.newImage("images/assets/snail_selected_arrow.png")    
@@ -290,10 +329,13 @@ function scene:show( event )
 
 	if ( phase == "will" ) then
 		-- Code here runs when the scene is still off screen (but is about to come on screen)
-        
 
 	elseif ( phase == "did" ) then
 		-- Code here runs when the scene is entirely on screen
+        physics.start()
+        physics.pause()
+        physics.setGravity(0, 9.8)
+        
 
 	end
 end
