@@ -61,9 +61,11 @@ function game:snailShoot()
     if (self.currSnail ~= nil ) then
         physics.start()
 
-        local power = 10 * self.currSnail.properties.aimPower
-
-        --self.currSnail.weapon:shoot(0, 0)
+        self.currSnail.weapon:shoot(self.currSnail.x, 
+                                    self.currSnail.y,
+                                    self.currSnail.properties.aimPower, 
+                                    self.currSnail.properties.aimDirection,
+                                    self.currSnail.properties.direction)
 
     end
 end
@@ -137,8 +139,8 @@ function scene:createCharacter(team, id, img)
 
         if(self.weapon == nil) then
             local weapon = rpgFactory:create()
-            weapon.x = self.x
-            weapon.y = self.yDelta
+            weapon.x = 0
+            weapon.y = 0
 
             self:insert(weapon)
             self.weapon = weapon
