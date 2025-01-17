@@ -1,7 +1,8 @@
 local composer = require("composer")
 local math = require("math")
 
-local rpgFactory = require("weapon.rpg")
+local snailFactory = require("character.snail")
+local terrainHelper = require("helpers.terrainHelper")
 
 local scene = composer.newScene();
 
@@ -52,22 +53,45 @@ function game:moveSnail(diff)
 
         self.currSnail.x = self.currSnail.x + diff
         self.scene.grpFieldContent.arrowCurrSnail.x = self.currSnail.x
-        -- self.scene.grpFieldContent.arrowCurrSnail.isVisible = true
         self.currSnail:showAim()
     end
 end
 
 function game:snailShoot()
     if (self.currSnail ~= nil ) then
-        physics.start()
 
-        self.currSnail.weapon:shoot(self.currSnail.x, 
+        local projectile = nil
+
+        if(self.currSnail.weapon.properties.hasProjectile) then
+            local projStartPoint = self.currSnail.weapon:getProjectileStartPoint(
+                self.currSnail.x, 
+                self.currSnail.y, 
+                self.currSnail.properties.direction, 
+                self.currSnail.properties.aimDirection
+            )
+
+            projectile = self.currSnail.weapon:createProjectile()
+            projectile.x = projStartPoint.x
+            projectile.y = projStartPoint.y
+
+            self.scene.grpFieldContent:insert(projectile)
+            
+            self.currSnail.weapon:shoot(self.currSnail.x, 
                                     self.currSnail.y,
                                     self.currSnail.properties.aimPower, 
                                     self.currSnail.properties.aimDirection,
-                                    self.currSnail.properties.direction)
+                                    self.currSnail.properties.direction,
+                                    projectile)
+
+        end
 
     end
+end
+
+function game:moveStart()
+end
+
+function game:moveEnd()
 end
 
 -- -----------------------------------------------------------------------------------
@@ -75,109 +99,10 @@ end
 -- -----------------------------------------------------------------------------------
 
 function scene:createCharacter(team, id, img)
-    local grpSnail = display.newGroup()
-    
-    grpSnail.properties = {
-        team = team,
-        id = id,
-        health = 100,
-        direction = 1,  -- -1 = left, 1 = right,
-        aimDirection = math.pi / 180 * -45, -- angle in radians
-        aimPower = 0
-    }
-
-    grpSnail.img = display.newImage("images/character/" .. img);
-    grpSnail:insert(grpSnail.img);
-    grpSnail.img.x = 0
-    grpSnail.img.y = 0
-
-    grpSnail.aimPointer = display.newImage("images/assets/aim_red.png")
-    grpSnail.aimPointer.isVisible = false
-    grpSnail:insert(grpSnail.aimPointer);
-
-    grpSnail.weapon = nil
-
-    grpSnail:scale(1, grpSnail.properties.direction)
-
-    function grpSnail:touch(event)
-
-        if event.phase == "began" then
-            game:onSnailTap(self)
-            print("Snail tapped - Team = " , self.properties.team, " ID = ", self.properties.id)
-
-            display.getCurrentStage():setFocus( self )
-            self.isFocus = true
-            self.xStart = self.img.x
-            self.yStart = self.img.y
-        end
-        if self.isFocus and event.phase == "moved" then
-            local newAngle = math.asin( event.yDelta / event.xDelta ) * self.properties.direction * (180 / math.pi)
-            if(newAngle < 180) then
-                self.properties.aimDirection = newAngle
-                print("aimDirection = " .. self.properties.aimDirection)            
-            end
-            local newPower = math.sqrt( event.yDelta * event.yDelta + event.xDelta * event.xDelta ) / 300 
-            if(newPower >= 0 and newPower < 1) then
-                self.properties.aimPower = newPower
-            end
-            print("aimPower = " .. self.properties.aimPower) 
-            self:showAim()       
-        end 
-        if event.phase == "ended" or event.phase == "cancelled" then
-
-            if(event.phase == "ended" and self.properties.aimPower > 0) then
-                game:snailShoot()
-            end
-
-            display.getCurrentStage():setFocus( nil )
-            self.isFocus = false
-        end
-        return true
-    end
-
-    function grpSnail:showAim()
-
-        if(self.weapon == nil) then
-            local weapon = rpgFactory:create()
-            weapon.x = 0
-            weapon.y = 0
-
-            self:insert(weapon)
-            self.weapon = weapon
-        end
-
-        self.aimPointer.isVisible = true
-        self.aimPointer.x = self.img.x + 200 * math.cos(self.properties.aimDirection * math.pi / 180)
-        self.aimPointer.y = self.img.y + 200 * math.sin(self.properties.aimDirection * math.pi / 180)
-
-        if(self.weapon ~= nil) then
-            self.weapon.rotation = self.properties.aimDirection
-        end
-
-    end
-
-    function grpSnail:hideAim()
-        self.weapon:removeSelf()
-        self.weapon = nil
-        self.aimPointer.isVisible = false
-    end
-
-    grpSnail:addEventListener("touch", self.grpSnail)
+    local grpSnail = snailFactory:createSnail(team, id, img, game)
 
     return grpSnail
  
-end
-
-function scene:createTerrain()
-    local grpTerrain = display.newGroup()
-
-    grpTerrain.img = display.newImage("images/background/ground_5000.png")
-    grpTerrain.img.x = 0
-    grpTerrain.img.y = 0
-
-    grpTerrain:insert(grpTerrain.img)
-
-    return grpTerrain
 end
 
 function scene:createControls(callbacks)
@@ -211,25 +136,45 @@ function scene:createControls(callbacks)
     return grpContros
 end
 
+function scene:createSoilPlatform(grpFieldContent, x0, y0)
+    local height = 3
+    for r = 1, height, 1 do
+        local soilLine = terrainHelper:generateSingleLine(10)
+        
+        for i = 1, table.getn(soilLine), 1 do
+            local brick = soilLine[i]
+
+            brick.x = brick.x + x0
+            brick.y = brick.y + y0 + r * brick.height
+
+            grpFieldContent:insert(brick)
+        end
+    end
+end
+
 function scene:createPlayField()
     local grpFieldContent = display.newGroup() -- contains playing field, characters etc, NOT including screen controls
 
     -- create terrain
-    local grpTerrain = self:createTerrain();
-    grpFieldContent:insert(grpTerrain)
+    local water = terrainHelper:createWater();
+    grpFieldContent:insert(water)
 
-    grpTerrain.x = display.contentWidth / 2
-    grpTerrain.y = display.contentHeight - grpTerrain.height / 2
+    water.x = display.contentWidth / 2
+    water.y = display.contentHeight - water.height / 2
+
+    -- creating soil platforms
+    self:createSoilPlatform(grpFieldContent, 100, 100)
+
     -- create teams
 
     local grpPlayer1 = self:createCharacter(0, 0, "snail_green.png");
     local grpPlayer2 = self:createCharacter(1, 0, "snail_brown.png");
     
     grpPlayer1.x = display.contentWidth / 2 - 500
-    grpPlayer1.y = grpTerrain.y - grpTerrain.height / 2 - grpPlayer1.height / 2
+    grpPlayer1.y = water.y - water.height / 2 - grpPlayer1.height / 2
 
     grpPlayer2.x = display.contentWidth / 2 + 500
-    grpPlayer2.y = grpTerrain.y - grpTerrain.height / 2 - grpPlayer2.height / 2
+    grpPlayer2.y = water.y - water.height / 2 - grpPlayer2.height / 2
 
     grpFieldContent:insert(grpPlayer1)
     grpFieldContent:insert(grpPlayer2)
@@ -297,6 +242,11 @@ end
 
 -- create()
 function scene:create( event )
+    
+    physics.start()
+    physics.setGravity(0, 9.8)
+    
+
     local sceneSelf = self
 	local sceneGroup = self.view
 	local params = event.params
@@ -334,9 +284,7 @@ function scene:show( event )
 
 	elseif ( phase == "did" ) then
 		-- Code here runs when the scene is entirely on screen
-        physics.start()
-        physics.pause()
-        physics.setGravity(0, 9.8)
+        
         
 
 	end
